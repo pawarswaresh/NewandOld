@@ -2012,23 +2012,6 @@
         
 
         function setupModalClosing() {
-            document.querySelectorAll('.modal').forEach(modal => {
-                // Click outside to close
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) {
-                        modal.style.display = 'none';
-                    }
-                });
-                
-                // Escape key to close
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape' && modal.style.display === 'flex') {
-                        modal.style.display = 'none';
-                    }
-                });
-            });
-            
-            // Update existing close buttons
             document.querySelectorAll('.close-modal').forEach(button => {
                 button.addEventListener('click', () => {
                     const modal = button.closest('.modal');
@@ -2037,6 +2020,8 @@
                     }
                 });
             });
+            
+            // Remove the outside click handler completely
         }
     
         function renderFavorites() {
@@ -3336,15 +3321,13 @@
 
         function setupModals() {
             document.querySelectorAll('.modal').forEach(modal => {
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) closeModal(modal);
-                });
-                
+                // Only keep the close button functionality
                 modal.querySelectorAll('.close-modal').forEach(btn => {
                     btn.addEventListener('click', () => closeModal(modal));
                 });
-           });
+            });
             
+            // Keep the escape key functionality
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && currentModal) {
                     closeModal(currentModal);
