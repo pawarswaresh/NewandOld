@@ -2542,7 +2542,8 @@
                 genre: 5             // Non-language genre matches
             };
 
-            const COMPATIBLE_TIME_SIGNATURES = {
+            // Time signature compatible pairs
+            const TIME_SIGNATURE_COMPATIBILITY = {
                 '6/8': ['3/4'],
                 '3/4': ['6/8']
             };
@@ -2619,19 +2620,17 @@
 
             // Score each song
             const scoredSongs = sameCategorySongs.map(song => {
-            const details = {
-                sameScaleType: isSameScaleType(currentSong.key, song.key),
-                scalePriority: 0,
-                languageScore: 0,
-                languages: [],
-                timeMatch: false,
-                timeCompatible: false,  // Added for compatible time signatures
-                taalMatch: false,
-                tempoSimilarity: 0,
-                genreMatch: 0
-            };
+                const details = {
+                    sameScaleType: isSameScaleType(currentSong.key, song.key),
+                    scalePriority: 0,
+                    languageScore: 0,
+                    languages: [],
+                    timeMatchType: 'none', // 'exact', 'compatible', or 'none'
+                    taalMatch: false,
+                    tempoSimilarity: 0,
+                    genreMatch: 0
+                };
 
-                // Calculate scores
                 let score = 0;
 
                 // 1. Language match
@@ -2645,49 +2644,39 @@
                 // 2. Scale relationships
                 if (currentSong.key && song.key) {
                     if (currentSong.key === song.key) {
-                        // Exact match
                         score += WEIGHTS.scale;
                         details.scalePriority = 4;
                     } 
-                    else if (
-                        // Relative major/minor
-                        (isCurrentMajor && song.key === HARMONIC_RELATIONS[currentSong.key]?.[2]) ||
-                        (isCurrentMinor && currentSong.key === HARMONIC_RELATIONS[song.key]?.[2])
-                    ) {
+                    else if ((isCurrentMajor && song.key === HARMONIC_RELATIONS[currentSong.key]?.[2]) ||
+                            (isCurrentMinor && currentSong.key === HARMONIC_RELATIONS[song.key]?.[2])) {
                         score += WEIGHTS.scale * 0.9;
                         details.scalePriority = 3;
                     }
-                    else if (
-                        // Circle of fifths relationship
-                        HARMONIC_RELATIONS[currentSong.key]?.includes(song.key)
-                    ) {
+                    else if (HARMONIC_RELATIONS[currentSong.key]?.includes(song.key)) {
                         score += WEIGHTS.scale * 0.8;
                         details.scalePriority = 2;
                     }
                     else if (details.sameScaleType) {
-                        // Same scale type but no harmonic relationship
                         score += WEIGHTS.scale * 0.5;
                         details.scalePriority = 1;
                     }
                 }
 
-                // 3. Time signature (updated for 6/8 ↔ 3/4 compatibility)
-                details.timeMatch = currentSong.time === song.time;
-                        details.timeCompatible = COMPATIBLE_TIME_SIGNATURES[currentSong.time]?.includes(song.time) || 
-                                                COMPATIBLE_TIME_SIGNATURES[song.time]?.includes(currentSong.time);
-                        
-                        if (details.timeMatch) {
-                            score += WEIGHTS.timeSignature;
-                        } 
-                        else if (details.timeCompatible) {
-                            // Give partial credit for compatible time signatures
-                            score += WEIGHTS.timeSignature * 0.8;
-                        }
+                // 3. Time signature matching
+                if (currentSong.time === song.time) {
+                    details.timeMatchType = 'exact';
+                    score += WEIGHTS.timeSignature;
+                } 
+                else if (TIME_SIGNATURE_COMPATIBILITY[currentSong.time]?.includes(song.time)) {
+                    details.timeMatchType = 'compatible';
+                    score += WEIGHTS.timeSignature * 0.9;
+                }
+
                 // 4. Taal match
                 details.taalMatch = currentSong.taal === song.taal;
                 if (details.taalMatch) score += WEIGHTS.taal;
 
-                // 5. Tempo
+                // 5. Tempo similarity
                 details.tempoSimilarity = getTempoSimilarity(currentSong.tempo, song.tempo);
                 score += WEIGHTS.tempo * details.tempoSimilarity;
 
@@ -2710,24 +2699,28 @@
                 };
             });
 
-            // Updated sorting to prioritize time matches over compatible time
+            // Sort by priority
             return scoredSongs.sort((a, b) => {
-                // 1. Same scale type
+                // 1. Same scale type (major/minor)
                 if (a.matchDetails.sameScaleType !== b.matchDetails.sameScaleType) {
                     return b.matchDetails.sameScaleType - a.matchDetails.sameScaleType;
                 }
                 
-                // 2. Language match
-                if (a.matchDetails.languageScore !== b.matchDetails.languageScore) {
-                    return b.matchDetails.languageScore - a.matchDetails.languageScore;
+                // 2. Time signature (exact > compatible > none)
+                const timePriority = {
+                    'exact': 2,
+                    'compatible': 1,
+                    'none': 0
+                };
+                const aTimePrio = timePriority[a.matchDetails.timeMatchType];
+                const bTimePrio = timePriority[b.matchDetails.timeMatchType];
+                if (aTimePrio !== bTimePrio) {
+                    return bTimePrio - aTimePrio;
                 }
                 
-                // 3. Time signature (exact matches first, then compatible)
-                if (a.matchDetails.timeMatch !== b.matchDetails.timeMatch) {
-                    return b.matchDetails.timeMatch - a.matchDetails.timeMatch;
-                }
-                if (a.matchDetails.timeCompatible !== b.matchDetails.timeCompatible) {
-                    return b.matchDetails.timeCompatible - a.matchDetails.timeCompatible;
+                // 3. Language match
+                if (a.matchDetails.languageScore !== b.matchDetails.languageScore) {
+                    return b.matchDetails.languageScore - a.matchDetails.languageScore;
                 }
                 
                 // 4. Taal match
@@ -2747,7 +2740,7 @@
                 
                 // 7. Total score
                 return b.matchScore - a.matchScore;
-            }).slice(0, 20); // Limit to top 20 suggestions
+            }).slice(0, 20);
         }
         
     
